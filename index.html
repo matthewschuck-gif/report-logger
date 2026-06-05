@@ -267,6 +267,7 @@
 const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbx1BzzxWpa30CgJ-gFxXKskToxC0Ktq9NDyY0kXpEV0IMC7y6XacBNUYfV6nG_kI-lC/exec";
 const SPREADSHEET_ID  = "1nDR7b4ThSmhQ2ZNVQBdIAvJyblcDXOM6O6OaI-JahMc";
 const PROXY_URL       = "https://yvutgnpgnthvnonhgdux.supabase.co/functions/v1/anthropic-proxy";
+const SUPABASE_ANON   = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl2dXRnbnBnbnRodm5vbmhnZHV4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk3NDIzNzgsImV4cCI6MjA5NTMxODM3OH0.bX5eI0EgnlQEjThX0CVpWFj1SNI726OxBwKpTgAv2Ak";
 
 // ── Branding — edit these to change header/footer text ───────────────────────
 const APP_TITLE    = "Report Logger";          // main header title
@@ -443,7 +444,7 @@ async function extractAll() {
   try {
     const res = await fetch(PROXY_URL, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${SUPABASE_ANON}` },
       body: JSON.stringify({ model: "claude-sonnet-4-20250514", max_tokens: 4000, system: SYSTEM_PROMPT, messages: [{ role: "user", content }] })
     });
     const data = await res.json();
