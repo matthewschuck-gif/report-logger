@@ -439,16 +439,26 @@ async function extractAll() {
     { type: "text", text: `Analyze these ${images.length} image(s) and return the JSON array.` }
   ];
 
+  const bodyStr = JSON.stringify({
+    action: "extract",
+    body: { model: "claude-sonnet-4-20250514", max_tokens: 4000, system: SYSTEM_PROMPT, messages: [{ role: "user", content }] }
+  });
+
+  document.getElementById('extract-sub').textContent = `Payload size: ${(bodyStr.length/1024).toFixed(0)}KB — sending…`;
+
   try {
     const res = await fetch(APPS_SCRIPT_URL, {
       method: "POST",
-      body: JSON.stringify({
-        action: "extract",
-        body: { model: "claude-sonnet-4-20250514", max_tokens: 4000, system: SYSTEM_PROMPT, messages: [{ role: "user", content }] }
-      }),
+      body: bodyStr,
       headers: { "Content-Type": "application/json" }
     });
-    const data = await res.json();
+
+    document.getElementById('extract-sub').textContent = `Response status: ${res.status} — parsing…`;
+
+    const text = await res.text();
+    document.getElementById('extract-sub').textContent = `Response: ${text.substring(0, 100)}`;
+
+    const data = JSON.parse(text);
     if (data.error) throw new Error(JSON.stringify(data.error));
     const raw = data.content?.find(b => b.type === "text")?.text || "[]";
     const clean = raw.replace(/```json|```/g, "").trim();
@@ -458,7 +468,10 @@ async function extractAll() {
     renderReview();
     showScreen('review');
   } catch(err) {
-    // On failure, create one blank entry per image so none are lost
+    // Show the full error in the extracting screen before switching
+    document.getElementById('extract-msg').textContent = 'Failed';
+    document.getElementById('extract-sub').textContent = `Error: ${err.message}`;
+    await new Promise(r => setTimeout(r, 3000)); // pause 3s so you can read it
     rows = images.map(() => emptyEntry());
     if (rows.length === 0) rows = [emptyEntry()];
     activeRow = 0;
