@@ -266,6 +266,7 @@
 <script>
 const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbx1BzzxWpa30CgJ-gFxXKskToxC0Ktq9NDyY0kXpEV0IMC7y6XacBNUYfV6nG_kI-lC/exec";
 const SPREADSHEET_ID  = "1nDR7b4ThSmhQ2ZNVQBdIAvJyblcDXOM6O6OaI-JahMc";
+const PROXY_URL       = "https://yvutgnpgnthvnonhgdux.supabase.co/functions/v1/anthropic-proxy";
 
 // ── Branding — edit these to change header/footer text ───────────────────────
 const APP_TITLE    = "Report Logger";          // main header title
@@ -439,26 +440,13 @@ async function extractAll() {
     { type: "text", text: `Analyze these ${images.length} image(s) and return the JSON array.` }
   ];
 
-  const bodyStr = JSON.stringify({
-    action: "extract",
-    body: { model: "claude-sonnet-4-20250514", max_tokens: 4000, system: SYSTEM_PROMPT, messages: [{ role: "user", content }] }
-  });
-
-  document.getElementById('extract-sub').textContent = `Payload size: ${(bodyStr.length/1024).toFixed(0)}KB — sending…`;
-
   try {
-    const res = await fetch(APPS_SCRIPT_URL, {
+    const res = await fetch(PROXY_URL, {
       method: "POST",
-      body: bodyStr,
-      headers: { "Content-Type": "application/json" }
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ model: "claude-sonnet-4-20250514", max_tokens: 4000, system: SYSTEM_PROMPT, messages: [{ role: "user", content }] })
     });
-
-    document.getElementById('extract-sub').textContent = `Response status: ${res.status} — parsing…`;
-
-    const text = await res.text();
-    document.getElementById('extract-sub').textContent = `Response: ${text.substring(0, 100)}`;
-
-    const data = JSON.parse(text);
+    const data = await res.json();
     if (data.error) throw new Error(JSON.stringify(data.error));
     const raw = data.content?.find(b => b.type === "text")?.text || "[]";
     const clean = raw.replace(/```json|```/g, "").trim();
@@ -468,10 +456,6 @@ async function extractAll() {
     renderReview();
     showScreen('review');
   } catch(err) {
-    // Show the full error in the extracting screen before switching
-    document.getElementById('extract-msg').textContent = 'Failed';
-    document.getElementById('extract-sub').textContent = `Error: ${err.message}`;
-    await new Promise(r => setTimeout(r, 3000)); // pause 3s so you can read it
     rows = images.map(() => emptyEntry());
     if (rows.length === 0) rows = [emptyEntry()];
     activeRow = 0;
