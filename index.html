@@ -310,6 +310,13 @@ EMAIL SCREENSHOTS:
 - Staff emails → student is who's being reported; infer type from content
 - PowerSchool/automated notifications → student named in the notification; type = "Information" unless disciplinary
 
+HANDWRITING GUIDANCE: These forms are filled out by middle school students whose handwriting may be messy, inconsistent, or difficult to read. Apply these rules:
+- Always attempt your best interpretation of unclear words — never leave a field blank just because handwriting is hard to read
+- Use context clues from the rest of the form to infer unclear words (e.g. if a name is partially legible and matches another mention elsewhere on the form, use that)
+- If you are uncertain about a specific word or phrase, include your best guess but append [unclear] after it in the text so the AP knows to verify
+- For student names especially, try hard — look for any legible letters and use the grade/date context to make your best attempt
+- Never write "illegible" or "unclear" as the entire field value — always provide your best reading with [unclear] markers where needed
+
 FIELD RULES (apply to all types):
 - student: Always the student the entry is ABOUT. Never a parent, staff, or sender name.
 - date: M/D/YYYY format
@@ -368,7 +375,7 @@ function compressImage(file, callback) {
     const img = new Image();
     img.onload = () => {
       const canvas = document.createElement('canvas');
-      const MAX = 1200;
+      const MAX = 1600;
       let w = img.width, h = img.height;
       if (w > MAX || h > MAX) {
         if (w > h) { h = Math.round(h * MAX / w); w = MAX; }
@@ -377,7 +384,7 @@ function compressImage(file, callback) {
       canvas.width = w;
       canvas.height = h;
       canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-      const compressed = canvas.toDataURL('image/jpeg', 0.7);
+      const compressed = canvas.toDataURL('image/jpeg', 0.92);
       callback({ preview: compressed, base64: compressed.split(',')[1] });
     };
     img.src = e.target.result;
