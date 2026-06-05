@@ -266,7 +266,6 @@
 <script>
 const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbx1BzzxWpa30CgJ-gFxXKskToxC0Ktq9NDyY0kXpEV0IMC7y6XacBNUYfV6nG_kI-lC/exec";
 const SPREADSHEET_ID  = "1nDR7b4ThSmhQ2ZNVQBdIAvJyblcDXOM6O6OaI-JahMc";
-const ANTHROPIC_KEY   = "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";
 
 // ── Branding — edit these to change header/footer text ───────────────────────
 const APP_TITLE    = "Report Logger";          // main header title
@@ -420,18 +419,16 @@ async function extractAll() {
   ];
 
   try {
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
+    const res = await fetch(APPS_SCRIPT_URL, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": ANTHROPIC_KEY,
-        "anthropic-version": "2023-06-01",
-        "anthropic-dangerous-direct-browser-access": "true"
-      },
-      body: JSON.stringify({ model: "claude-sonnet-4-20250514", max_tokens: 4000, system: SYSTEM_PROMPT, messages: [{ role: "user", content }] })
+      body: JSON.stringify({
+        action: "extract",
+        body: { model: "claude-sonnet-4-20250514", max_tokens: 4000, system: SYSTEM_PROMPT, messages: [{ role: "user", content }] }
+      }),
+      headers: { "Content-Type": "application/json" }
     });
     const data = await res.json();
-    if (data.error) throw new Error(data.error.message);
+    if (data.error) throw new Error(JSON.stringify(data.error));
     const raw = data.content?.find(b => b.type === "text")?.text || "[]";
     const clean = raw.replace(/```json|```/g, "").trim();
     const parsed = JSON.parse(clean);
