@@ -266,6 +266,7 @@
 <script>
 const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbx1BzzxWpa30CgJ-gFxXKskToxC0Ktq9NDyY0kXpEV0IMC7y6XacBNUYfV6nG_kI-lC/exec";
 const SPREADSHEET_ID  = "1nDR7b4ThSmhQ2ZNVQBdIAvJyblcDXOM6O6OaI-JahMc";
+const ANTHROPIC_KEY   = "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";
 
 // ── Branding — edit these to change header/footer text ───────────────────────
 const APP_TITLE    = "Report Logger";          // main header title
@@ -276,22 +277,62 @@ const TYPE_OPTIONS = ["Investigation","Disipline","Information","Witness"];
 const CONTACT_OPTIONS = ["Call","Email","Meeting","None"];
 const CONSEQUENCE_OPTIONS = ["None","Warning","Conference","Lunch Detention","After School Detention","ISS","OSS","Time in Office","Intervention","Mediation","Loss of Privlilege","Referred to Guidance","Other See Notes"];
 
-const SYSTEM_PROMPT = `You are an assistant to a school Assistant Principal. You receive one or more images of student incident reports, referrals, written statements, or screenshots.
+const SYSTEM_PROMPT = `You are an assistant to a school Assistant Principal logging student incidents. You receive one or more images which may be any combination of:
 
-Analyze ALL images together and group intelligently:
-- Same student, same incident across multiple images → ONE compiled entry with a single narrative
-- Same incident, multiple students → SEPARATE entry per student; each description names the other students involved
+PHYSICAL INCIDENT REPORT FORMS (most common): A printed school form with these specific fields:
+- Top: First Name, Last Name, Grade (7th or 8th), Today's Date
+- "Who was involved?" — lists students involved in the incident
+- "Witnessed?" — lists students who saw it
+- "Where did it happen?" — location (hallway, classroom, bus, cafeteria, etc.)
+- "Evidence?" — screenshots, videos, etc.
+- "When did it happen?" — time or period
+- "What Happened?" — a written narrative description from the student's point of view
+- "Next Steps" — what the student thinks should happen
+- "Follow Up Meeting" — adult name and meeting date
+- "Notes" — follow-up notes
+- Bottom checkboxes: "Logged in PS Yes/No", "SRO Contacted Yes/No", "Parents/Guardian contacted (Phone/Email/In Person/None)", "Teachers Communicated With Yes/No"
+
+For this form type, map fields as follows:
+- student: First Name + Last Name from the top of the form
+- date: "Today's Date" field
+- description: Combine "What Happened" narrative with location, time/period, who was involved, and any witnesses into one coherent account
+- type: "Investigation" if it's a report being filed for review; "Witness" if the form is filled out by a witness; "Disipline" if consequence is indicated
+- parentContact: Map the bottom checkbox — Phone→"Call", Email→"Email", In Person→"Meeting", None→"None"
+- consequenceType: Only if explicitly indicated on the form
+- notes: Include Next Steps, Follow Up Meeting details, Evidence noted, SRO contacted status, Teachers communicated status, and any Notes section content
+- powerschool: If "Logged in PS: Yes" is checked, put "Yes" — otherwise leave empty
+
+WRITTEN STUDENT STATEMENTS: Handwritten or typed statements from students. Treat similarly to the form — extract the student's name, date, and use their written content as the description. Type = "Witness" if they are describing what they saw, "Investigation" otherwise.
+
+EMAIL SCREENSHOTS:
+- Parent emails → student is their child; type = "Information" unless incident described; parentContact = "Email"; capture sender name/email in notes
+- Staff emails → student is who's being reported; infer type from content
+- PowerSchool/automated notifications → student named in the notification; type = "Information" unless disciplinary
+
+FIELD RULES (apply to all types):
+- student: Always the student the entry is ABOUT. Never a parent, staff, or sender name.
+- date: M/D/YYYY format
+- description: Clear factual narrative weaving together all relevant details from the image
+- type: "Investigation" | "Disipline" | "Information" | "Witness" — pick closest match
+- parentContact: "Call" | "Email" | "Meeting" | "None" — or empty string
+- consequenceType: Only if explicitly mentioned — "None" | "Warning" | "Conference" | "Lunch Detention" | "After School Detention" | "ISS" | "OSS" | "Time in Office" | "Intervention" | "Mediation" | "Loss of Privlilege" | "Referred to Guidance" | "Other See Notes"
+- notes: Any follow-up, sender info, meeting details, evidence, SRO/teacher communication status
+- powerschool: "Yes" if logged in PS confirmed, otherwise empty string
+
+GROUP & BATCHING RULES:
+- Same student, same incident across multiple images → ONE compiled entry
+- Same incident, multiple students → SEPARATE entry per student, each description names the others
 - Unrelated situations → independent entries
 
 Return ONLY a valid JSON array, no markdown, no explanation:
 [{
-  "student": "Full name or empty string",
+  "student": "Full student name or empty string",
   "date": "M/D/YYYY or empty string",
-  "description": "Clear factual narrative. For group incidents name others involved.",
+  "description": "Clear factual narrative",
   "type": "Investigation | Disipline | Information | Witness | empty string",
   "parentContact": "Call | Email | Meeting | None | empty string",
   "consequenceType": "None | Warning | Conference | Lunch Detention | After School Detention | ISS | OSS | Time in Office | Intervention | Mediation | Loss of Privlilege | Referred to Guidance | Other See Notes | empty string",
-  "notes": "Follow-up actions or extra context or empty string",
+  "notes": "Follow-up, sender info, meeting details, evidence, PS/SRO/teacher status — or empty string",
   "powerschool": ""
 }]
 Leave any field as empty string if not determinable. Never guess or fabricate.`;
@@ -381,10 +422,16 @@ async function extractAll() {
   try {
     const res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": ANTHROPIC_KEY,
+        "anthropic-version": "2023-06-01",
+        "anthropic-dangerous-direct-browser-access": "true"
+      },
       body: JSON.stringify({ model: "claude-sonnet-4-20250514", max_tokens: 4000, system: SYSTEM_PROMPT, messages: [{ role: "user", content }] })
     });
     const data = await res.json();
+    if (data.error) throw new Error(data.error.message);
     const raw = data.content?.find(b => b.type === "text")?.text || "[]";
     const clean = raw.replace(/```json|```/g, "").trim();
     const parsed = JSON.parse(clean);
@@ -393,9 +440,11 @@ async function extractAll() {
     renderReview();
     showScreen('review');
   } catch(err) {
-    rows = [emptyEntry()];
+    // On failure, create one blank entry per image so none are lost
+    rows = images.map(() => emptyEntry());
+    if (rows.length === 0) rows = [emptyEntry()];
     activeRow = 0;
-    renderReview(true);
+    renderReview(true, err.message);
     showScreen('review');
   }
 }
@@ -408,10 +457,12 @@ function startManual() {
 }
 
 // ── Review ───────────────────────────────────────────────────────────────────
-function renderReview(extractFailed) {
+function renderReview(extractFailed, errMsg) {
   const errEl = document.getElementById('review-error');
-  if (extractFailed) { errEl.textContent = '⚠️ Extraction failed — fill in manually.'; errEl.style.display = 'block'; }
-  else { errEl.style.display = 'none'; }
+  if (extractFailed) {
+    errEl.textContent = `⚠️ Extraction failed${errMsg ? ': ' + errMsg : ''} — fill in manually. ${rows.length > 1 ? rows.length + ' blank entries created, one per image.' : ''}`;
+    errEl.style.display = 'block';
+  } else { errEl.style.display = 'none'; }
 
   renderTabs();
   renderCard();
