@@ -35,6 +35,68 @@
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=Source+Sans+3:wght@400;600;700&display=swap" rel="stylesheet" />
 
   <style>
+    #rl-gate {
+      position: fixed; inset: 0; z-index: 9999;
+      background: #490e6f;
+      display: flex; align-items: center; justify-content: center;
+      font-family: 'Source Sans 3', sans-serif;
+    }
+    #rl-gate-inner {
+      text-align: center; padding: 2rem;
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,225,0,0.25);
+      border-radius: 16px; width: 100%; max-width: 320px;
+    }
+    #rl-gate h2 { color: #ffe100; font-size: 1.1rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 0.3rem; }
+    #rl-gate p { color: rgba(255,255,255,0.5); font-size: 0.8rem; margin-bottom: 1.25rem; }
+    #rl-pin {
+      width: 100%; padding: 0.7rem 1rem; border-radius: 8px;
+      border: 1.5px solid rgba(255,225,0,0.4);
+      background: rgba(0,0,0,0.3); color: #fff;
+      font-size: 1.4rem; letter-spacing: 0.3em; text-align: center;
+      outline: none; margin-bottom: 0.75rem;
+    }
+    #rl-pin:focus { border-color: #ffe100; }
+    #rl-error { color: #f87171; font-size: 0.8rem; margin-bottom: 0.5rem; min-height: 1.2em; }
+    #rl-submit {
+      width: 100%; padding: 0.7rem; border-radius: 8px; border: none;
+      background: #ffe100; color: #490e6f; font-weight: 800;
+      font-size: 0.95rem; cursor: pointer; letter-spacing: 0.05em;
+      transition: opacity 0.2s;
+    }
+    #rl-submit:hover { opacity: 0.88; }
+    #rl-logo { font-size: 2rem; margin-bottom: 0.75rem; }
+  </style>
+  <script>
+    (function() {
+      const KEY = 'rl_auth';
+      function unlock() {
+        const gate = document.getElementById('rl-gate');
+        if (gate) gate.style.display = 'none';
+      }
+      function checkGate() {
+        if (sessionStorage.getItem(KEY) === '1') { unlock(); return; }
+        document.getElementById('rl-submit').addEventListener('click', tryPin);
+        document.getElementById('rl-pin').addEventListener('keydown', function(e) {
+          if (e.key === 'Enter') tryPin();
+        });
+      }
+      function tryPin() {
+        const val = document.getElementById('rl-pin').value.trim();
+        if (val === '5064') {
+          sessionStorage.setItem(KEY, '1');
+          unlock();
+        } else {
+          document.getElementById('rl-error').textContent = 'Incorrect PIN. Try again.';
+          document.getElementById('rl-pin').value = '';
+          document.getElementById('rl-pin').focus();
+        }
+      }
+      document.addEventListener('DOMContentLoaded', checkGate);
+    })();
+  </script>
+
+  <style>
     :root {
       --navy: #490e6f;
       --gold: #ffe100;
@@ -162,6 +224,18 @@
   </style>
 </head>
 <body>
+
+<!-- Password gate -->
+<div id="rl-gate">
+  <div id="rl-gate-inner">
+    <div id="rl-logo">🏔️</div>
+    <h2>Report Logger</h2>
+    <p>Staff access only</p>
+    <input id="rl-pin" type="password" inputmode="numeric" maxlength="6" placeholder="••••" autocomplete="off" />
+    <div id="rl-error"></div>
+    <button id="rl-submit">Unlock</button>
+  </div>
+</div>
 
 <div class="app">
 
