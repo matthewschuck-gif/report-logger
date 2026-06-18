@@ -526,7 +526,7 @@ async function extractAll() {
     const res = await fetch(PROXY_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json", "Authorization": `Bearer ${SUPABASE_ANON}` },
-      body: JSON.stringify({ model: "claude-sonnet-4-20250514", max_tokens: 4000, system: SYSTEM_PROMPT, messages: [{ role: "user", content }] })
+      body: JSON.stringify({ model: "claude-sonnet-4-6", max_tokens: 4000, system: SYSTEM_PROMPT, messages: [{ role: "user", content }] })
     });
     const data = await res.json();
     if (data.error) throw new Error(JSON.stringify(data.error));
