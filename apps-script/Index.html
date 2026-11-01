@@ -1,0 +1,839 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Report Logger" />
+  <meta name="theme-color" content="#080612" />
+  <title>Report Logger</title>
+
+  <!-- PWA manifest inline -->
+  <script>
+    const manifest = {
+      name: "Report Logger",
+      short_name: "Reports",
+      start_url: "./",
+      display: "standalone",
+      background_color: "#080612",
+      theme_color: "#080612",
+      icons: [{
+        src: "data:image/svg+xml," + encodeURIComponent(`<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'><rect width='192' height='192' fill='%23490e6f'/><path d='M96 16L176 52V112C176 152 136 182 96 192C56 182 16 152 16 112V52L96 16Z' fill='%23ffe100'/><text x='96' y='130' text-anchor='middle' fill='%23490e6f' font-size='80' font-weight='900' font-family='serif'>M</text></svg>`),
+        sizes: "192x192", type: "image/svg+xml"
+      }]
+    };
+    const blob = new Blob([JSON.stringify(manifest)], {type:'application/json'});
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('link');
+    link.rel = 'manifest'; link.href = url;
+    document.head.appendChild(link);
+  </script>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+
+  <style>
+    #rl-gate {
+      position: fixed; inset: 0; z-index: 9999;
+      background: #080612;
+      display: flex; align-items: center; justify-content: center;
+      font-family: 'Geist', sans-serif;
+    }
+    #rl-gate::before {
+      content: ''; position: absolute; inset: 0; pointer-events: none;
+      background: radial-gradient(ellipse 70% 60% at 50% 0%, rgba(147,51,234,0.18) 0%, transparent 70%),
+                  radial-gradient(ellipse 50% 40% at 50% 100%, rgba(234,179,8,0.06) 0%, transparent 60%);
+    }
+    #rl-gate-inner {
+      position: relative; text-align: center; padding: 2rem 1.75rem;
+      background: rgba(16,13,34,0.9);
+      border: 1px solid rgba(147,51,234,0.3);
+      border-radius: 20px; width: 100%; max-width: 320px;
+      box-shadow: 0 0 60px rgba(147,51,234,0.15), 0 24px 64px rgba(0,0,0,0.6);
+      backdrop-filter: blur(12px);
+    }
+    #rl-gate-logo {
+      width: 52px; height: 52px; border-radius: 14px; margin: 0 auto 1.1rem;
+      background: linear-gradient(135deg, rgba(147,51,234,0.3), rgba(234,179,8,0.15));
+      border: 1px solid rgba(147,51,234,0.4);
+      display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 0 24px rgba(147,51,234,0.25);
+    }
+    #rl-gate h2 { color: #f0ebff; font-size: 1.1rem; font-weight: 800; letter-spacing: -0.01em; margin-bottom: 0.3rem; }
+    #rl-gate p { color: rgba(240,235,255,0.4); font-size: 0.8rem; margin-bottom: 1.5rem; }
+    #rl-pin {
+      width: 100%; padding: 0.75rem 1rem; border-radius: 10px;
+      border: 1.5px solid rgba(147,51,234,0.35);
+      background: rgba(8,6,18,0.8); color: #f0ebff;
+      font-size: 1.5rem; letter-spacing: 0.4em; text-align: center;
+      outline: none; margin-bottom: 0.75rem; font-family: 'Geist', sans-serif;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    #rl-pin:focus { border-color: #9333ea; box-shadow: 0 0 0 3px rgba(147,51,234,0.15); }
+    #rl-error { color: #f87171; font-size: 0.78rem; margin-bottom: 0.5rem; min-height: 1.2em; }
+    #rl-submit {
+      width: 100%; padding: 0.75rem; border-radius: 10px; border: none;
+      background: linear-gradient(135deg, #9333ea, #7c3aed);
+      color: #fff; font-weight: 700; font-family: 'Geist', sans-serif;
+      font-size: 0.9rem; cursor: pointer; letter-spacing: 0.03em;
+      transition: opacity 0.2s, transform 0.15s, box-shadow 0.2s;
+      box-shadow: 0 4px 20px rgba(147,51,234,0.35);
+    }
+    #rl-submit:hover { opacity: 0.92; transform: translateY(-1px); box-shadow: 0 6px 28px rgba(147,51,234,0.45); }
+    #rl-submit:active { transform: scale(0.98); }
+  </style>
+  <script>
+    (function() {
+      const KEY = 'rl_auth';
+      function unlock() {
+        const gate = document.getElementById('rl-gate');
+        if (gate) gate.style.display = 'none';
+      }
+      function checkGate() {
+        unlock(); return; // signed in with Google (Code.gs)
+        document.getElementById('rl-submit').addEventListener('click', tryPin);
+        document.getElementById('rl-pin').addEventListener('keydown', function(e) {
+          if (e.key === 'Enter') tryPin();
+        });
+      }
+      function tryPin() {
+        const val = document.getElementById('rl-pin').value.trim();
+        if (false) { // the PIN is gone: Google sign-in (Code.gs)
+          sessionStorage.setItem(KEY, '1');
+          unlock();
+        } else {
+          document.getElementById('rl-error').textContent = 'Incorrect PIN. Try again.';
+          document.getElementById('rl-pin').value = '';
+          document.getElementById('rl-pin').focus();
+        }
+      }
+      document.addEventListener('DOMContentLoaded', checkGate);
+    })();
+  </script>
+
+  <style>
+    :root {
+      --bg:      #080612;
+      --deep:    #0a0618;
+      --card:    #100d22;
+      --card2:   #0d0a1e;
+      --border:  rgba(147,51,234,0.22);
+      --border2: rgba(147,51,234,0.12);
+      --purple:  #9333ea;
+      --purple2: #7c3aed;
+      --gold:    #eab308;
+      --gold2:   #ca8a04;
+      --text:    #f0ebff;
+      --muted:   #8b7fb5;
+      --muted2:  rgba(240,235,255,0.35);
+      --glow-p:  rgba(147,51,234,0.18);
+      --glow-g:  rgba(234,179,8,0.15);
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; overflow-x: hidden; }
+    body {
+      background: var(--bg);
+      font-family: 'Geist', sans-serif;
+      color: var(--text);
+      min-height: 100vh;
+      min-height: -webkit-fill-available;
+    }
+    input, select, textarea, button { font-family: inherit; }
+
+    .app { display: flex; flex-direction: column; align-items: center; padding: 28px 16px 48px; min-height: 100vh; }
+    .inner { width: 100%; max-width: 540px; }
+
+    /* Header */
+    .header { text-align: center; margin-bottom: 28px; width: 100%; max-width: 540px; }
+    .wordmark { display: inline-flex; align-items: center; gap: 14px; margin-bottom: 12px; }
+    .wordmark-text { text-align: left; }
+    .wordmark-sub { font-size: 10px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--gold); font-weight: 700; opacity: 0.8; }
+    .wordmark-title { font-size: 22px; font-weight: 800; color: var(--text); letter-spacing: -0.03em; line-height: 1.1; }
+    .gold-rule { height: 1px; background: linear-gradient(90deg, transparent, rgba(147,51,234,0.5), rgba(234,179,8,0.4), rgba(147,51,234,0.5), transparent); border-radius: 1px; margin: 0 auto; max-width: 320px; }
+    .header-sub { font-size: 11.5px; color: var(--muted); margin-top: 8px; letter-spacing: 0.04em; }
+
+    /* Inputs */
+    .field { margin-bottom: 12px; }
+    .field-label { display: block; font-size: 10px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 5px; }
+    .field input, .field select, .field textarea {
+      width: 100%; padding: 9px 12px;
+      border: 1.5px solid rgba(147,51,234,0.25); border-radius: 9px;
+      font-size: 13.5px; background: rgba(8,6,18,0.7); color: var(--text);
+      outline: none; transition: border-color 0.15s, box-shadow 0.15s;
+    }
+    .field input:focus, .field select:focus, .field textarea:focus {
+      border-color: var(--purple); box-shadow: 0 0 0 3px rgba(147,51,234,0.12);
+    }
+    .field select option { background: #100d22; color: var(--text); }
+    .field textarea { resize: vertical; }
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+    /* Card */
+    .card {
+      background: var(--card); border-radius: 18px; padding: 22px;
+      border: 1px solid var(--border); color: var(--text);
+      box-shadow: 0 0 40px rgba(147,51,234,0.08), 0 20px 48px rgba(0,0,0,0.5);
+    }
+    .gold-bar { height: 1px; background: linear-gradient(90deg, transparent, var(--gold), transparent); opacity: 0.4; margin: 14px 0; }
+
+    /* Tabs */
+    .tabs { display: flex; gap: 6px; margin-bottom: 12px; overflow-x: auto; padding-bottom: 4px; }
+    .tabs::-webkit-scrollbar { display: none; }
+    .tab {
+      flex-shrink: 0; padding: 6px 14px; border-radius: 20px; font-size: 11.5px;
+      font-weight: 700; cursor: pointer; white-space: nowrap;
+      border: 1.5px solid var(--border2); background: rgba(147,51,234,0.06);
+      color: var(--muted); transition: all 0.15s;
+    }
+    .tab:hover { border-color: var(--border); color: var(--text); }
+    .tab.active { border-color: var(--gold); background: rgba(234,179,8,0.12); color: var(--gold); }
+    .tab-add {
+      flex-shrink: 0; padding: 6px 12px; border-radius: 20px;
+      border: 1.5px dashed rgba(147,51,234,0.3); background: transparent;
+      color: var(--muted); font-size: 11.5px; cursor: pointer;
+    }
+
+    /* Buttons */
+    .btn-gold {
+      width: 100%; padding: 14px 0; border-radius: 12px; border: none;
+      background: linear-gradient(135deg, var(--purple), var(--purple2));
+      color: #fff; font-size: 14.5px; font-weight: 700; cursor: pointer;
+      letter-spacing: 0.02em; transition: opacity 0.2s, transform 0.15s, box-shadow 0.2s;
+      box-shadow: 0 4px 24px rgba(147,51,234,0.35);
+    }
+    .btn-gold:hover { opacity: 0.92; transform: translateY(-1px); box-shadow: 0 8px 32px rgba(147,51,234,0.45); }
+    .btn-gold:active { transform: scale(0.98); }
+    .btn-ghost {
+      width: 100%; padding: 11px 0; border-radius: 12px;
+      border: 1.5px solid var(--border); background: transparent;
+      color: var(--muted); font-size: 13px; cursor: pointer;
+      transition: border-color 0.15s, color 0.15s;
+    }
+    .btn-ghost:hover { border-color: rgba(147,51,234,0.5); color: var(--text); }
+    .btn-ghost-sm {
+      padding: 7px 16px; border-radius: 8px;
+      border: 1px solid var(--border); background: rgba(147,51,234,0.08);
+      color: var(--muted); font-size: 12px; font-weight: 600; cursor: pointer;
+      transition: all 0.15s;
+    }
+    .btn-ghost-sm:hover { border-color: var(--purple); color: var(--text); }
+    .btn-ghost-sm:disabled { border-color: rgba(147,51,234,0.08); color: rgba(139,127,181,0.35); cursor: default; }
+    .btn-danger {
+      padding: 3px 10px; border-radius: 6px;
+      border: 1px solid rgba(248,113,113,0.3); background: rgba(248,113,113,0.08);
+      color: #f87171; font-size: 12px; cursor: pointer;
+    }
+    .btn-remove-img {
+      position: absolute; top: -6px; right: -6px;
+      width: 18px; height: 18px; border-radius: 50%;
+      border: none; background: #991b1b; color: white;
+      font-size: 10px; cursor: pointer; line-height: 18px; padding: 0;
+    }
+    .btn-log { flex: 2; padding: 13px 0; border-radius: 10px; border: none; font-size: 14.5px; font-weight: 700; cursor: pointer; transition: all 0.2s; }
+    .btn-log.ready {
+      background: linear-gradient(135deg, var(--gold), var(--gold2));
+      color: #0a0618; box-shadow: 0 4px 20px rgba(234,179,8,0.3);
+    }
+    .btn-log.ready:hover { transform: translateY(-1px); box-shadow: 0 6px 28px rgba(234,179,8,0.4); }
+    .btn-log.disabled { background: rgba(147,51,234,0.08); color: var(--muted); cursor: not-allowed; border: 1px solid var(--border2); }
+    .btn-back {
+      flex: 1; padding: 13px 0; border-radius: 10px;
+      border: 1.5px solid var(--border); background: transparent;
+      color: var(--muted); font-size: 13px; cursor: pointer; transition: all 0.15s;
+    }
+    .btn-back:hover { border-color: rgba(147,51,234,0.4); color: var(--text); }
+
+    /* Drop zone */
+    .dropzone {
+      border: 1.5px dashed rgba(147,51,234,0.3); border-radius: 16px;
+      text-align: center; cursor: pointer;
+      background: rgba(147,51,234,0.04); margin-bottom: 14px;
+      transition: border-color 0.2s, background 0.2s;
+    }
+    .dropzone:hover, .dropzone:active { border-color: rgba(147,51,234,0.6); background: rgba(147,51,234,0.07); }
+    .dropzone-empty { padding: 44px 20px; }
+    .dropzone-has { padding: 14px; }
+    .dropzone-icon { font-size: 36px; margin-bottom: 10px; opacity: 0.7; }
+    .dropzone-title { font-size: 15px; font-weight: 700; color: var(--text); margin-bottom: 4px; }
+    .dropzone-sub { font-size: 12px; color: var(--muted); }
+    .dropzone-add { font-size: 13px; color: var(--purple); font-weight: 600; }
+
+    /* Thumbnails */
+    .thumbs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+    .thumb { position: relative; }
+    .thumb img { width: 72px; height: 56px; object-fit: cover; border-radius: 8px; border: 1.5px solid rgba(147,51,234,0.4); display: block; }
+
+    /* Spinner / Loading */
+    @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+    @keyframes fadeUp { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes pulseGlow { 0%,100% { box-shadow: 0 0 20px rgba(147,51,234,0.3); } 50% { box-shadow: 0 0 40px rgba(147,51,234,0.6); } }
+    .spin { display: inline-block; animation: spin 1s linear infinite; }
+    .fade-up { animation: fadeUp 0.35s cubic-bezier(0.4,0,0.2,1) both; }
+    .center-pad { text-align: center; padding: 56px 20px; }
+    .spin-icon {
+      width: 56px; height: 56px; border-radius: 50%; margin: 0 auto 18px;
+      border: 2px solid rgba(147,51,234,0.2); border-top-color: var(--purple);
+      animation: spin 0.9s linear infinite, pulseGlow 2s ease-in-out infinite;
+    }
+    .spin-title { font-size: 16px; font-weight: 700; color: var(--text); margin-bottom: 6px; }
+    .spin-sub { font-size: 13px; color: var(--muted); }
+    .success-green { font-size: 13px; color: #4ade80; }
+
+    /* Done screen */
+    .done-pad { text-align: center; padding: 44px 20px; }
+    .done-title { font-size: 24px; font-weight: 800; color: var(--gold); letter-spacing: -0.02em; margin-bottom: 8px; }
+    .done-sub { font-size: 14px; color: var(--muted); margin-bottom: 6px; }
+    .done-link { color: var(--purple); font-size: 13px; display: block; margin-bottom: 24px; text-decoration: underline; opacity: 0.8; }
+    .done-link:hover { opacity: 1; }
+
+    /* Error */
+    .error-banner {
+      background: rgba(248,113,113,0.07); border: 1px solid rgba(248,113,113,0.25);
+      border-radius: 10px; padding: 10px 14px; margin-bottom: 12px;
+      font-size: 13px; color: #fca5a5;
+    }
+    .error-title { font-size: 16px; font-weight: 700; color: #f87171; margin-bottom: 8px; }
+    .error-body { font-size: 13px; color: var(--muted); margin-bottom: 24px; max-width: 340px; margin-left: auto; margin-right: auto; }
+
+    /* Submit row */
+    .submit-info { font-size: 12px; color: var(--muted); text-align: center; margin-bottom: 10px; }
+    .submit-info span { color: var(--gold); }
+    .submit-row { display: flex; gap: 8px; }
+
+    /* Entry header */
+    .entry-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+    .entry-count { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; }
+    .nav-row { display: flex; justify-content: space-between; margin-top: 8px; }
+
+    /* Footer */
+    .footer { margin-top: 36px; font-size: 10.5px; color: rgba(147,51,234,0.25); text-align: center; letter-spacing: 0.12em; text-transform: uppercase; }
+
+    /* Screen visibility */
+    .screen { display: none; }
+    .screen.active { display: block; }
+
+    /* iOS safe area */
+    @supports (padding-bottom: env(safe-area-inset-bottom)) {
+      .app { padding-bottom: calc(48px + env(safe-area-inset-bottom)); }
+    }
+  </style>
+</head>
+<body>
+
+<!-- Password gate -->
+<div id="rl-gate">
+  <div id="rl-gate-inner">
+    <div id="rl-gate-logo">
+      <svg width="26" height="26" viewBox="0 0 40 46" fill="none">
+        <path d="M20 2L38 10V24C38 34 29 42 20 44C11 42 2 34 2 24V10L20 2Z" fill="rgba(147,51,234,0.5)" stroke="rgba(147,51,234,0.8)" stroke-width="1.5"/>
+        <path d="M12 30L20 14L28 30" stroke="#eab308" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M15 25H25" stroke="#eab308" stroke-width="2" stroke-linecap="round" opacity="0.6"/>
+      </svg>
+    </div>
+    <h2>Report Logger</h2>
+    <p>Staff access only</p>
+    <input id="rl-pin" type="password" inputmode="numeric" maxlength="6" placeholder="••••" autocomplete="off" />
+    <div id="rl-error"></div>
+    <button id="rl-submit">Unlock</button>
+  </div>
+</div>
+
+<div class="app">
+
+  <!-- HEADER -->
+  <div class="header">
+    <div class="wordmark">
+      <div style="width:44px;height:44px;border-radius:12px;background:linear-gradient(135deg,rgba(147,51,234,0.25),rgba(234,179,8,0.1));border:1px solid rgba(147,51,234,0.4);display:flex;align-items:center;justify-content:center;box-shadow:0 0 20px rgba(147,51,234,0.2)">
+        <svg width="24" height="28" viewBox="0 0 40 46" fill="none">
+          <path d="M20 2L38 10V24C38 34 29 42 20 44C11 42 2 34 2 24V10L20 2Z" fill="rgba(147,51,234,0.35)" stroke="rgba(147,51,234,0.7)" stroke-width="1.5"/>
+          <path d="M12 30L20 14L28 30" stroke="#eab308" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M15 25H25" stroke="#eab308" stroke-width="2" stroke-linecap="round" opacity="0.7"/>
+        </svg>
+      </div>
+      <div class="wordmark-text">
+        <div class="wordmark-sub">East Mifflin SD</div>
+        <div class="wordmark-title" id="app-title">Report Logger</div>
+      </div>
+    </div>
+    <div class="gold-rule"></div>
+    <div class="header-sub" id="app-subtitle">Personal Notes Tracker · 2025–26</div>
+  </div>
+
+  <div class="inner">
+
+    <!-- UPLOAD SCREEN -->
+    <div id="screen-upload" class="screen active fade-up">
+      <div class="dropzone dropzone-empty" id="dropzone" onclick="document.getElementById('fileInput').click()">
+        <div class="dropzone-icon">
+          <svg width="38" height="38" viewBox="0 0 24 24" fill="none" stroke="rgba(147,51,234,0.6)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="display:block;margin:0 auto 10px"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M3 9h18M9 21V9"/></svg>
+        </div>
+        <div class="dropzone-title">Add Report Images</div>
+        <div class="dropzone-sub">Statements · Referrals · Screenshots · One or many</div>
+      </div>
+      <input type="file" id="fileInput" accept="image/*" multiple capture="environment" style="display:none" onchange="handleFiles(this.files)" />
+
+      <div class="thumbs" id="thumbs"></div>
+
+      <button class="btn-gold" id="btn-analyze" style="display:none;margin-bottom:8px" onclick="extractAll()">
+        Analyze <span id="analyze-count">0</span> Image<span id="analyze-s">s</span> →
+      </button>
+      <button class="btn-ghost" onclick="startManual()">Enter manually instead</button>
+    </div>
+
+    <!-- EXTRACTING SCREEN -->
+    <div id="screen-extracting" class="screen">
+      <div class="center-pad">
+        <div class="spin-icon"></div>
+        <div class="spin-title" id="extract-msg">Reading images…</div>
+        <div class="spin-sub" id="extract-sub"></div>
+      </div>
+    </div>
+
+    <!-- REVIEW SCREEN -->
+    <div id="screen-review" class="screen fade-up">
+      <div class="error-banner" id="review-error" style="display:none"></div>
+      <div class="tabs" id="tabs"></div>
+      <div class="card" id="review-card"></div>
+      <div style="margin-top:14px">
+        <div class="submit-info" id="submit-info"></div>
+        <div class="submit-row">
+          <button class="btn-back" onclick="goBack()">← Back</button>
+          <button class="btn-log disabled" id="btn-log" onclick="submitAll()">Log 0 Rows to Sheet ↑</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- SUBMITTING SCREEN -->
+    <div id="screen-submitting" class="screen">
+      <div class="center-pad">
+        <div class="spin-icon"></div>
+        <div class="spin-title" id="submit-msg">Logging…</div>
+        <div class="success-green" id="logged-count"></div>
+      </div>
+    </div>
+
+    <!-- DONE SCREEN -->
+    <div id="screen-done" class="screen fade-up">
+      <div class="done-pad">
+        <div style="width:72px;height:72px;border-radius:20px;margin:0 auto 20px;background:linear-gradient(135deg,rgba(147,51,234,0.2),rgba(234,179,8,0.1));border:1px solid rgba(147,51,234,0.4);display:flex;align-items:center;justify-content:center;box-shadow:0 0 40px rgba(147,51,234,0.25)">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#eab308" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="20 6 9 17 4 12"/>
+          </svg>
+        </div>
+        <div class="done-title">Logged!</div>
+        <div class="done-sub" id="done-msg"></div>
+        <a class="done-link" href="https://docs.google.com/spreadsheets/d/1nDR7b4ThSmhQ2ZNVQBdIAvJyblcDXOM6O6OaI-JahMc/edit" target="_blank">Open sheet to verify ↗</a>
+        <button class="btn-gold" onclick="reset()">Log More Reports</button>
+      </div>
+    </div>
+
+    <!-- ERROR SCREEN -->
+    <div id="screen-error" class="screen fade-up">
+      <div class="done-pad">
+        <div style="width:64px;height:64px;border-radius:18px;margin:0 auto 16px;background:rgba(248,113,113,0.08);border:1px solid rgba(248,113,113,0.25);display:flex;align-items:center;justify-content:center">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#f87171" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+          </svg>
+        </div>
+        <div class="error-title">Logging Failed</div>
+        <div class="error-body" id="error-body"></div>
+        <div style="display:flex;gap:10px;justify-content:center">
+          <button onclick="showScreen('review')" style="padding:10px 20px;border-radius:8px;border:1.5px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;font-size:13px;font-family:inherit">← Review</button>
+          <button onclick="submitAll()" style="padding:10px 20px;border-radius:8px;border:none;background:linear-gradient(135deg,var(--gold),var(--gold2));color:#0a0618;cursor:pointer;font-size:13px;font-weight:700;font-family:inherit">Retry</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="footer" id="app-footer">2025–26</div>
+</div>
+
+<script>
+// Server calls (Code.gs) through google.script.run. Replies are JSON text.
+function rlRun(fn, ...args) {
+  return new Promise((resolve, reject) => {
+    google.script.run.withSuccessHandler(t => resolve(JSON.parse(t)))
+      .withFailureHandler(e => reject(new Error(String(e && e.message || e).replace(/^Exception:\s*/, ''))))[fn](...args);
+  });
+}
+
+// ── Branding — edit these to change header/footer text ───────────────────────
+const APP_TITLE    = "Report Logger";          // main header title
+const APP_SUBTITLE = "Personal Notes Tracker"; // header subtitle
+const APP_FOOTER   = "";                       // footer text
+
+const TYPE_OPTIONS = ["Investigation","Disipline","Information","Witness"];
+const CONTACT_OPTIONS = ["Call","Email","Meeting","None"];
+const CONSEQUENCE_OPTIONS = ["None","Warning","Conference","Lunch Detention","After School Detention","ISS","OSS","Time in Office","Intervention","Mediation","Loss of Privlilege","Referred to Guidance","Other See Notes"];
+
+const SYSTEM_PROMPT = `You are an assistant to a school Assistant Principal logging student incidents. You receive one or more images which may be any combination of:
+
+PHYSICAL INCIDENT REPORT FORMS (most common): A printed school form with these specific fields:
+- Top: First Name, Last Name, Grade (7th or 8th), Today's Date
+- "Who was involved?" — lists students involved in the incident
+- "Witnessed?" — lists students who saw it
+- "Where did it happen?" — location (hallway, classroom, bus, cafeteria, etc.)
+- "Evidence?" — screenshots, videos, etc.
+- "When did it happen?" — time or period
+- "What Happened?" — a written narrative description from the student's point of view
+- "Next Steps" — what the student thinks should happen
+- "Follow Up Meeting" — adult name and meeting date
+- "Notes" — follow-up notes
+- Bottom checkboxes: "Logged in PS Yes/No", "SRO Contacted Yes/No", "Parents/Guardian contacted (Phone/Email/In Person/None)", "Teachers Communicated With Yes/No"
+
+For this form type, map fields as follows:
+- student: First Name + Last Name from the top of the form
+- date: "Today's Date" field
+- description: Combine "What Happened" narrative with location, time/period, who was involved, and any witnesses into one coherent account
+- type: "Investigation" if it's a report being filed for review; "Witness" if the form is filled out by a witness; "Disipline" if consequence is indicated
+- parentContact: Map the bottom checkbox — Phone→"Call", Email→"Email", In Person→"Meeting", None→"None"
+- consequenceType: Only if explicitly indicated on the form
+- notes: Include Next Steps, Follow Up Meeting details, Evidence noted, SRO contacted status, Teachers communicated status, and any Notes section content
+- powerschool: If "Logged in PS: Yes" is checked, put "Yes" — otherwise leave empty
+
+WRITTEN STUDENT STATEMENTS: Handwritten or typed statements from students. Treat similarly to the form — extract the student's name, date, and use their written content as the description. Type = "Witness" if they are describing what they saw, "Investigation" otherwise.
+
+EMAIL SCREENSHOTS:
+- Parent emails → student is their child; type = "Information" unless incident described; parentContact = "Email"; capture sender name/email in notes
+- Staff emails → student is who's being reported; infer type from content
+- PowerSchool/automated notifications → student named in the notification; type = "Information" unless disciplinary
+
+HANDWRITING GUIDANCE: These forms are filled out by middle school students whose handwriting may be messy, inconsistent, or difficult to read. Apply these rules:
+- Always attempt your best interpretation of unclear words — never leave a field blank just because handwriting is hard to read
+- Use context clues from the rest of the form to infer unclear words (e.g. if a name is partially legible and matches another mention elsewhere on the form, use that)
+- If you are uncertain about a specific word or phrase, include your best guess but append [unclear] after it in the text so the AP knows to verify
+- For student names especially, try hard — look for any legible letters and use the grade/date context to make your best attempt
+- Never write "illegible" or "unclear" as the entire field value — always provide your best reading with [unclear] markers where needed
+
+FIELD RULES (apply to all types):
+- student: Always the student the entry is ABOUT. Never a parent, staff, or sender name.
+- date: M/D/YYYY format
+- description: Clear factual narrative weaving together all relevant details from the image
+- type: "Investigation" | "Disipline" | "Information" | "Witness" — pick closest match
+- parentContact: "Call" | "Email" | "Meeting" | "None" — or empty string
+- consequenceType: Only if explicitly mentioned — "None" | "Warning" | "Conference" | "Lunch Detention" | "After School Detention" | "ISS" | "OSS" | "Time in Office" | "Intervention" | "Mediation" | "Loss of Privlilege" | "Referred to Guidance" | "Other See Notes"
+- notes: Any follow-up, sender info, meeting details, evidence, SRO/teacher communication status
+- powerschool: "Yes" if logged in PS confirmed, otherwise empty string
+
+GROUP & BATCHING RULES:
+- Same student, same incident across multiple images → ONE compiled entry
+- Same incident, multiple students → SEPARATE entry per student, each description names the others
+- Unrelated situations → independent entries
+
+Return ONLY a valid JSON array, no markdown, no explanation:
+[{
+  "student": "Full student name or empty string",
+  "date": "M/D/YYYY or empty string",
+  "description": "Clear factual narrative",
+  "type": "Investigation | Disipline | Information | Witness | empty string",
+  "parentContact": "Call | Email | Meeting | None | empty string",
+  "consequenceType": "None | Warning | Conference | Lunch Detention | After School Detention | ISS | OSS | Time in Office | Intervention | Mediation | Loss of Privlilege | Referred to Guidance | Other See Notes | empty string",
+  "notes": "Follow-up, sender info, meeting details, evidence, PS/SRO/teacher status — or empty string",
+  "powerschool": ""
+}]
+Leave any field as empty string if not determinable. Never guess or fabricate.`;
+
+// ── State ────────────────────────────────────────────────────────────────────
+let images = [];
+let rows = [];
+let activeRow = 0;
+
+const todayStr = () => {
+  const d = new Date();
+  return `${d.getMonth()+1}/${d.getDate()}/${d.getFullYear()}`;
+};
+
+const emptyEntry = (o = {}) => ({
+  student:"", date:todayStr(), description:"", type:"",
+  parentContact:"", consequenceType:"", notes:"", powerschool:"", ...o
+});
+
+// ── Screen management ────────────────────────────────────────────────────────
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  const el = document.getElementById('screen-' + id);
+  if (el) { el.classList.add('active'); el.classList.remove('fade-up'); void el.offsetWidth; el.classList.add('fade-up'); }
+  window.scrollTo(0, 0);
+}
+
+// ── Image handling ───────────────────────────────────────────────────────────
+function compressImage(file, callback) {
+  const reader = new FileReader();
+  reader.onload = e => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      const MAX = 1600;
+      let w = img.width, h = img.height;
+      if (w > MAX || h > MAX) {
+        if (w > h) { h = Math.round(h * MAX / w); w = MAX; }
+        else { w = Math.round(w * MAX / h); h = MAX; }
+      }
+      canvas.width = w;
+      canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      const compressed = canvas.toDataURL('image/jpeg', 0.92);
+      callback({ preview: compressed, base64: compressed.split(',')[1] });
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+function handleFiles(files) {
+  Array.from(files).filter(f => f.type.startsWith('image/')).forEach(file => {
+    compressImage(file, imgObj => {
+      images.push(imgObj);
+      renderThumbs();
+    });
+  });
+}
+
+function renderThumbs() {
+  const dz = document.getElementById('dropzone');
+  const thumbsEl = document.getElementById('thumbs');
+  const btnAnalyze = document.getElementById('btn-analyze');
+  const countEl = document.getElementById('analyze-count');
+  const sEl = document.getElementById('analyze-s');
+
+  thumbsEl.innerHTML = images.map((img, i) => `
+    <div class="thumb">
+      <img src="${img.preview}" alt="" />
+      <button class="btn-remove-img" onclick="removeImage(${i})">✕</button>
+    </div>`).join('');
+
+  if (images.length > 0) {
+    dz.className = 'dropzone dropzone-has';
+    dz.innerHTML = '<div class="dropzone-add">+ Add more images</div>';
+    btnAnalyze.style.display = 'block';
+    countEl.textContent = images.length;
+    sEl.textContent = images.length === 1 ? '' : 's';
+  } else {
+    dz.className = 'dropzone dropzone-empty';
+    dz.innerHTML = `<div class="dropzone-icon">📋</div><div class="dropzone-title">Add Report Images</div><div class="dropzone-sub">Statements · Referrals · Screenshots · One or many</div>`;
+    btnAnalyze.style.display = 'none';
+  }
+}
+
+function removeImage(i) {
+  images.splice(i, 1);
+  renderThumbs();
+}
+
+// Drag and drop
+const dz = document.getElementById('dropzone');
+dz.addEventListener('dragover', e => e.preventDefault());
+dz.addEventListener('drop', e => { e.preventDefault(); handleFiles(e.dataTransfer.files); });
+
+// ── Extract ──────────────────────────────────────────────────────────────────
+async function extractAll() {
+  showScreen('extracting');
+  document.getElementById('extract-msg').textContent = 'Reading images…';
+  document.getElementById('extract-sub').textContent = `Analyzing ${images.length} image${images.length > 1 ? 's' : ''} and grouping entries…`;
+
+  const content = [
+    ...images.map(img => ({ type: "image", source: { type: "base64", media_type: "image/jpeg", data: img.base64 } })),
+    { type: "text", text: `Analyze these ${images.length} image(s) and return the JSON array.` }
+  ];
+
+  try {
+    // Claude reads the photos on the server (Code.gs rlExtract; key in Script Properties).
+    const imgs = content.filter(b => b.type === "image").map(b => ({ base64: b.source.data, mediaType: b.source.media_type }));
+    const data = await rlRun('rlExtract', JSON.stringify(imgs), SYSTEM_PROMPT);
+    const raw = data.text || "[]";
+    const clean = raw.replace(/```json|```/g, "").trim();
+    const parsed = JSON.parse(clean);
+    rows = (Array.isArray(parsed) ? parsed : [parsed]).map(e => emptyEntry(e));
+    activeRow = 0;
+    renderReview();
+    showScreen('review');
+  } catch(err) {
+    rows = images.map(() => emptyEntry());
+    if (rows.length === 0) rows = [emptyEntry()];
+    activeRow = 0;
+    renderReview(true, err.message);
+    showScreen('review');
+  }
+}
+
+function startManual() {
+  rows = [emptyEntry()];
+  activeRow = 0;
+  renderReview();
+  showScreen('review');
+}
+
+// ── Review ───────────────────────────────────────────────────────────────────
+function renderReview(extractFailed, errMsg) {
+  const errEl = document.getElementById('review-error');
+  if (extractFailed) {
+    errEl.textContent = `⚠️ Extraction failed${errMsg ? ': ' + errMsg : ''} — fill in manually. ${rows.length > 1 ? rows.length + ' blank entries created, one per image.' : ''}`;
+    errEl.style.display = 'block';
+  } else { errEl.style.display = 'none'; }
+
+  renderTabs();
+  renderCard();
+  updateSubmitBar();
+}
+
+function renderTabs() {
+  const tabsEl = document.getElementById('tabs');
+  tabsEl.innerHTML = rows.map((r, i) => `
+    <button class="tab ${i === activeRow ? 'active' : ''}" onclick="switchRow(${i})">
+      ${r.student || `Entry ${i+1}`}
+    </button>`).join('') + `<button class="tab-add" onclick="addRow()">+ Add</button>`;
+}
+
+function renderCard() {
+  const r = rows[activeRow] || emptyEntry();
+  const card = document.getElementById('review-card');
+  card.innerHTML = `
+    <div class="entry-header">
+      <div class="entry-count">Entry ${activeRow+1} of ${rows.length}</div>
+      ${rows.length > 1 ? `<button class="btn-danger" onclick="removeRow(${activeRow})">Remove</button>` : ''}
+    </div>
+    <div class="gold-bar"></div>
+
+    ${field('Student Name *', 'student', 'text', null, r.student)}
+    <div class="grid-2">
+      ${field('Date', 'date', 'text', null, r.date)}
+      ${field('Type', 'type', 'select', TYPE_OPTIONS, r.type)}
+    </div>
+    ${field('Description', 'description', 'textarea', null, r.description)}
+    <div class="grid-2">
+      ${field('Parent Contact', 'parentContact', 'select', CONTACT_OPTIONS, r.parentContact)}
+      ${field('Consequence', 'consequenceType', 'select', CONSEQUENCE_OPTIONS, r.consequenceType)}
+    </div>
+    ${field('Notes', 'notes', 'textarea', null, r.notes)}
+    ${field('PowerSchool?', 'powerschool', 'text', null, r.powerschool)}
+
+    ${rows.length > 1 ? `
+    <div class="nav-row">
+      <button class="btn-ghost-sm" ${activeRow === 0 ? 'disabled' : ''} onclick="switchRow(${activeRow-1})">← Prev</button>
+      <button class="btn-ghost-sm" ${activeRow === rows.length-1 ? 'disabled' : ''} onclick="switchRow(${activeRow+1})">Next →</button>
+    </div>` : ''}
+  `;
+}
+
+function field(label, key, type, options, value) {
+  const id = `field-${key}`;
+  let input;
+  if (options) {
+    input = `<select class="field input" id="${id}" onchange="updateField('${key}', this.value)">
+      <option value="">—</option>
+      ${options.map(o => `<option value="${o}" ${value === o ? 'selected' : ''}>${o}</option>`).join('')}
+    </select>`;
+  } else if (type === 'textarea') {
+    input = `<textarea id="${id}" rows="3" onchange="updateField('${key}', this.value)" oninput="updateField('${key}', this.value)">${escHtml(value)}</textarea>`;
+  } else {
+    input = `<input type="text" id="${id}" value="${escHtml(value)}" oninput="updateField('${key}', this.value)" />`;
+  }
+  return `<div class="field"><label class="field-label">${label}</label>${input}</div>`;
+}
+
+function escHtml(s) { return (s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+function updateField(key, val) {
+  rows[activeRow][key] = val;
+  // Update tab label if student name changed
+  if (key === 'student') { renderTabs(); updateSubmitBar(); }
+  else { updateSubmitBar(); }
+}
+
+function updateSubmitBar() {
+  const valid = rows.filter(r => r.student.trim());
+  const infoEl = document.getElementById('submit-info');
+  const btnLog = document.getElementById('btn-log');
+
+  let info = `${valid.length} of ${rows.length} entr${rows.length === 1 ? 'y' : 'ies'} ready`;
+  if (rows.some(r => !r.student.trim())) info += ` <span>· unnamed will be skipped</span>`;
+  infoEl.innerHTML = info;
+
+  if (valid.length > 0) {
+    btnLog.className = 'btn-log ready';
+    btnLog.textContent = `Log ${valid.length} Row${valid.length !== 1 ? 's' : ''} to Sheet ↑`;
+    btnLog.disabled = false;
+  } else {
+    btnLog.className = 'btn-log disabled';
+    btnLog.textContent = 'Log 0 Rows to Sheet ↑';
+    btnLog.disabled = true;
+  }
+}
+
+function switchRow(i) {
+  activeRow = i;
+  renderTabs();
+  renderCard();
+}
+
+function addRow() {
+  rows.push(emptyEntry());
+  activeRow = rows.length - 1;
+  renderTabs();
+  renderCard();
+  updateSubmitBar();
+}
+
+function removeRow(i) {
+  rows.splice(i, 1);
+  if (rows.length === 0) rows.push(emptyEntry());
+  activeRow = Math.min(activeRow, rows.length - 1);
+  renderTabs();
+  renderCard();
+  updateSubmitBar();
+}
+
+function goBack() {
+  showScreen('upload');
+}
+
+// ── Submit ───────────────────────────────────────────────────────────────────
+async function submitAll() {
+  const valid = rows.filter(r => r.student.trim());
+  if (!valid.length) return;
+
+  showScreen('submitting');
+  document.getElementById('submit-msg').textContent = `Logging ${valid.length} row${valid.length > 1 ? 's' : ''}…`;
+  document.getElementById('logged-count').textContent = '';
+
+  try {
+    const data = await rlRun('rlLog', JSON.stringify(valid)); // Code.gs rlLog
+    if (data.success) {
+      const ok = data.count || valid.length;
+      document.getElementById('done-msg').textContent = `${ok} row${ok !== 1 ? 's' : ''} logged successfully!`;
+      showScreen('done');
+    } else {
+      throw new Error(data.error || "Unknown error");
+    }
+  } catch(err) {
+    document.getElementById('error-body').textContent = 'Could not log the entries: ' + err.message;
+    showScreen('error');
+  }
+}
+
+// ── Reset ────────────────────────────────────────────────────────────────────
+function reset() {
+  images = [];
+  rows = [];
+  activeRow = 0;
+  renderThumbs();
+  document.getElementById('fileInput').value = '';
+  showScreen('upload');
+}
+
+// ── PWA install prompt ───────────────────────────────────────────────────────
+let deferredPrompt;
+window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); deferredPrompt = e; });
+
+// ── Apply branding constants to DOM & meta tags ───────────────────────────────
+document.getElementById('app-title').textContent    = APP_TITLE;
+document.getElementById('app-subtitle').textContent = APP_SUBTITLE;
+document.getElementById('app-footer').textContent   = APP_FOOTER;
+document.title = APP_TITLE;
+document.querySelector('meta[name="apple-mobile-web-app-title"]').content = APP_TITLE;
+</script>
+</body>
+</html>
