@@ -19,7 +19,7 @@
       background_color: "#080612",
       theme_color: "#080612",
       icons: [{
-        src: "data:image/svg+xml," + encodeURIComponent(`<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'><rect width='192' height='192' fill='%23490e6f'/><path d='M96 16L176 52V112C176 152 136 182 96 192C56 182 16 152 16 112V52L96 16Z' fill='%23ffe100'/><text x='96' y='130' text-anchor='middle' fill='%23490e6f' font-size='80' font-weight='900' font-family='serif'>M</text></svg>`),
+        src: "data:image/svg+xml," + encodeURIComponent(`<svg xmlns='http:\/\/www.w3.org/2000/svg' viewBox='0 0 192 192'><rect width='192' height='192' fill='%23490e6f'/><path d='M96 16L176 52V112C176 152 136 182 96 192C56 182 16 152 16 112V52L96 16Z' fill='%23ffe100'/><text x='96' y='130' text-anchor='middle' fill='%23490e6f' font-size='80' font-weight='900' font-family='serif'>M</text></svg>`),
         sizes: "192x192", type: "image/svg+xml"
       }]
     };
@@ -456,7 +456,7 @@
 function rlRun(fn, ...args) {
   return new Promise((resolve, reject) => {
     google.script.run.withSuccessHandler(t => resolve(JSON.parse(t)))
-      .withFailureHandler(e => reject(new Error(String(e && e.message || e).replace(/^Exception:\s*/, ''))))[fn](...args);
+      .withFailureHandler(e => reject(new Error(String(e && e.message || e).replace(/^Exception:\s{0,}/, ''))))[fn](...args);
   });
 }
 
