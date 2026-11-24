@@ -56,25 +56,24 @@ function allowed_() {
 
 function requireAllowed_() { if (!allowed_()) throw new Error('Report Logger is private to the Sheet owner and ALLOWED_EMAILS.'); }
 
-/** Reads report photos with Claude. images: [{ base64, mediaType }]; system: the page's prompt. */
+/** Reads report photos with the AI that is on (Claude or Gemini, see AiSwitch.gs). images: [{ base64, mediaType }]; system: the page's prompt. */
 function rlExtract(imagesJson, system) {
   requireAllowed_();
   if (String(rlSetting_('AI')).toUpperCase() === 'OFF') throw new Error('Reading images is turned off on the Settings tab. Type the entries instead.');
-  const key = PropertiesService.getScriptProperties().getProperty('ANTHROPIC_API_KEY');
-  if (!key) throw new Error('No Claude key yet: Report Logger menu › Save Claude API key…');
+  if (!emsAiHasKey_()) throw new Error('No ' + (emsAiProvider_() === 'GEMINI' ? 'Gemini' : 'Claude') + ' key yet: Report Logger menu › AI: Claude or Gemini › Save the key.');
   const images = JSON.parse(imagesJson || '[]');
   if (!images.length) throw new Error('Add at least one image.');
   const content = images.slice(0, 10).map(function (img) {
     return { type: 'image', source: { type: 'base64', media_type: img.mediaType || 'image/jpeg', data: img.base64 } };
   }).concat([{ type: 'text', text: 'Analyze these ' + images.length + ' image(s) and return the JSON array.' }]);
-  const res = UrlFetchApp.fetch('https://api.anthropic.com/v1/messages', {
+  const res = emsAiFetch_({
     method: 'post', contentType: 'application/json', muteHttpExceptions: true,
-    headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01' },
+    headers: { 'anthropic-version': '2023-06-01' },
     payload: JSON.stringify({ model: rlSetting_('CLAUDE_MODEL') || 'claude-sonnet-5-5', max_tokens: Number(rlSetting_('AI_MAX_TOKENS')) || 4000,
       system: String(system || ''), messages: [{ role: 'user', content: content }] }),
   });
   const data = JSON.parse(res.getContentText() || '{}');
-  if (res.getResponseCode() !== 200) throw new Error((data.error && data.error.message) || 'Claude returned ' + res.getResponseCode());
+  if (res.getResponseCode() !== 200) throw new Error((data.error && data.error.message) || 'The AI returned ' + res.getResponseCode());
   const text = (data.content || []).filter(function (b) { return b.type === 'text'; }).map(function (b) { return b.text; }).join('');
   return JSON.stringify({ text: text });
 }
@@ -118,7 +117,7 @@ function include(name) { return HtmlService.createHtmlOutputFromFile(name).getCo
 function onOpen() {
   SpreadsheetApp.getUi().createMenu('Report Logger')
     .addItem('Run setup (Settings tab)', 'rlSetup')
-    .addItem('Save Claude API key…', 'rlSaveKey_')
+    .addSubMenu(emsAiMenu_(SpreadsheetApp.getUi()))
     .addToUi();
 }
 
@@ -130,15 +129,6 @@ function rlSetup() {
   sh.getDataRange().getValues().slice(1).forEach(function (r) { have[String(r[0]).trim()] = true; });
   const missing = RL_DEFAULTS_.filter(function (d) { return !have[d[0]]; });
   if (missing.length) sh.getRange(sh.getLastRow() + 1, 1, missing.length, 3).setValues(missing);
-  try { SpreadsheetApp.getUi().alert('Report Logger is set up. Next: Report Logger › Save Claude API key…, then Deploy › New deployment › Web app (Execute as Me, Anyone within EASD).'); } catch (e) { /* trigger */ }
+  try { SpreadsheetApp.getUi().alert('Report Logger is set up. Next: Report Logger › AI: Claude or Gemini › Save the key, then Deploy › New deployment › Web app (Execute as Me, Anyone within EASD).'); } catch (e) { /* trigger */ }
 }
 
-function rlSaveKey_() {
-  const ui = SpreadsheetApp.getUi();
-  const r = ui.prompt('Claude API key', 'Paste the key (starts with sk-ant-). Saved in Script Properties, never in the Sheet or the page.', ui.ButtonSet.OK_CANCEL);
-  if (r.getSelectedButton() !== ui.Button.OK) return;
-  const key = r.getResponseText().trim();
-  if (!/^sk-ant-/.test(key)) { ui.alert('That doesn\'t look like a Claude key.'); return; }
-  PropertiesService.getScriptProperties().setProperty('ANTHROPIC_API_KEY', key);
-  ui.alert('Key saved.');
-}
